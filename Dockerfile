@@ -5,9 +5,8 @@ ENV PYTHONUNBUFFERED=1 \
     TZ=UTC
 
 # tzdata — чтобы TZ из .env работал (Asia/Yekaterinburg и т.п.)
-# su-exec — для понижения привилегий после chown /data (см. entrypoint.sh)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tzdata su-exec \
+    && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
