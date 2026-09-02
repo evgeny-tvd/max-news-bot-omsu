@@ -53,9 +53,11 @@ class Settings:
     vk_token: str = ""              # сервисный ключ dev.vk.ru
     news_interval: int = 60         # сек, опрос стены
 
-    # ── Источник 2: канал MAX (РСЧС-стиль, опционально) ────────
+    # ── Источник 2: канал MAX (РСЧС-стиль) ───────────────────────
     # Читается через get_messages БЕЗ членства бота, дедуп по mid.
-    rsch_chat_id: int = 0           # публичный канал-источник (напр. РСЧС региона)
+    # Встроен ПО УМОЛЧАНИЮ, как в боевом боте: РСЧС Свердловской области.
+    # Коллеги из других регионов меняют на свой канал в .env.
+    rsch_chat_id: int = -69712963313704  # публичный канал «РСЧС Свердловская область»
     rsch_interval: int = 60         # сек, опрос канала
 
     # ── Хранилище state (дедупликация) ─────────────────────────
@@ -87,7 +89,7 @@ def load_settings(env: dict | None = None) -> Settings:
             vk_domain=os.environ.get("VK_DOMAIN", "").strip(),
             vk_token=_read_secret("VK_TOKEN", "/run/secrets/vk_token"),
             news_interval=_as_int("NEWS_INTERVAL", 60),
-            rsch_chat_id=_as_int("RSCH_CHAT_ID", 0),
+            rsch_chat_id=_as_int("RSCH_CHAT_ID", -69712963313704),
             rsch_interval=_as_int("RSCH_INTERVAL", 60),
             state_dir=os.environ.get("STATE_DIR", "./state").strip(),
             webhook_url=os.environ.get("WEBHOOK_URL", "").strip().rstrip("/"),

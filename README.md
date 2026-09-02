@@ -51,7 +51,7 @@ curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/i
 | `MAX_BOT_TOKEN` | ✅ | токен бота MAX |
 | `TARGET_CHAT_ID` | ✅ | канал, куда репостить |
 | `VK_DOMAIN`, `VK_TOKEN` | — | VK-паблик-источник (сервисный ключ dev.vk.ru) |
-| `RSCH_CHAT_ID` | — | публичный канал-источник (например, РСЧС региона) |
+| `RSCH_CHAT_ID` | встроен* | публичный канал-источник (по умолчанию РСЧС Свердловской обл.) |
 | `NEWS_INTERVAL` | — | интервал опроса, сек (60) |
 | `POLLING` | — | `true` — Long Polling (по умолчанию); `false` — webhook |
 | `TZ` | — | часовой пояс (Asia/Yekaterinburg) |
