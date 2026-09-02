@@ -222,6 +222,12 @@ async def repost_news(force: bool = False) -> int:
         return 0
 
     last_id = int(_read_state(VK_STATE_FILE) or 0)
+    # Первая инициализация (state пуст): только запоминаем последний пост,
+    # чтобы не заливать в канал архив паблика (как у РСЧС).
+    if last_id == 0 and not force:
+        _save_state(VK_STATE_FILE, str(items[0]["id"]))
+        log.info("VK: инициализация — запомнен последний пост %s (старые не шлём)", items[0]["id"])
+        return 0
     fresh = [p for p in items if p["id"] > last_id]
     if force:
         fresh = items[:1] if not fresh else fresh
