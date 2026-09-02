@@ -461,17 +461,27 @@ async def on_dp_started() -> None:
 
 
 def build_app() -> FastAPI:
-    """FastAPI-приложение: /healthz всегда; /webhook только если не polling."""
+    """FastAPI-приложение: /healthz. Webhook-часть — только при POLLING=false."""
+    if settings.polling:
+        # В polling-режиме MAX-объект webhook не создаём вовсе:
+        # он пишет лишние предупреждения в лог и не используется.
+        app = FastAPI(title="max-news-bot health")
+
+        @app.get("/healthz")
+        async def healthz() -> JSONResponse:
+            return JSONResponse({"status": "ok", "polling": True})
+
+        return app
+
     from maxapi.webhook.fastapi import FastAPIMaxWebhook
 
     webhook = FastAPIMaxWebhook(dp=dp, bot=bot, secret=settings.webhook_secret or None)
     app = FastAPI(title="max-news-bot webhook", lifespan=webhook.lifespan)
-    if not settings.polling:
-        webhook.setup(app, path=settings.webhook_path)
+    webhook.setup(app, path=settings.webhook_path)
 
     @app.get("/healthz")
     async def healthz() -> JSONResponse:
-        return JSONResponse({"status": "ok", "polling": settings.polling})
+        return JSONResponse({"status": "ok", "polling": False})
 
     return app
 
