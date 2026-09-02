@@ -57,7 +57,27 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 if ! docker compose version >/dev/null 2>&1; then
-  fail "Нужен docker с поддержкой 'docker compose' (плагин). Обновите Docker."
+  warn "Плагин 'docker compose' не найден. Пробую установить автоматически…"
+  # 1) системный пакет (если есть apt и права)
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get install -y -qq docker-compose-v2 >/dev/null 2>&1 \
+      || apt-get install -y -qq docker-compose >/dev/null 2>&1 || true
+  fi
+  # 2) плагин в пользовательской папке (~/.docker/cli-plugins — без root)
+  if ! docker compose version >/dev/null 2>&1; then
+    mkdir -p "$HOME/.docker/cli-plugins"
+    curl -fsSL -o "$HOME/.docker/cli-plugins/docker-compose" \
+      "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+      && chmod +x "$HOME/.docker/cli-plugins/docker-compose" || true
+  fi
+  if docker compose version >/dev/null 2>&1; then
+    say "Плагин docker compose установлен."
+  else
+    fail "Не удалось установить плагин docker compose. Сделайте вручную:
+  sudo apt-get install -y docker-compose-v2
+  (или: sudo curl -fsSL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose && sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose)
+Затем запустите установку снова."
+  fi
 fi
 if ! docker info >/dev/null 2>&1; then
   warn "Docker установлен, но нет доступа (нужна группа docker или sudo)."
