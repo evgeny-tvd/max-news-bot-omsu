@@ -1,0 +1,13 @@
+# Секреты — никогда в git
+.env
+secrets/
+
+# State бота
+state/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/

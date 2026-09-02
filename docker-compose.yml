@@ -1,0 +1,17 @@
+services:
+  bot:
+    image: ghcr.io/evgeny-tvd/max-news-bot-omsu:latest
+    container_name: max-news-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - TZ=${TZ:-Asia/Yekaterinburg}
+    volumes:
+      # state (дедупликация постов) живёт на хосте — переживает пересоздание контейнера
+      - ./state:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/healthz')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
