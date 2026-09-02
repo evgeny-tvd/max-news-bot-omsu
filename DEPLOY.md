@@ -68,11 +68,16 @@ VK-паблик — **основной источник** бота. Для чт�
 
 ## 5. Установка
 
-Подключитесь к серверу по SSH и выполните одну команду:
+Подключитесь к серверу по SSH и выполните:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/install.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/install.sh)
 ```
+
+> ⚠️ Не заменяйте на `curl … | bash`: в этом случае мастер не сможет
+> прочитать ваши ответы (stdin занят скриптом). Если `bash <(…)` у вас
+> не работает — скачайте файл и запустите:
+> `curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/install.sh -o install.sh && bash install.sh`
 
 Если Docker не установлен — скрипт подскажет:
 ```bash

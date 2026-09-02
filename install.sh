@@ -2,7 +2,15 @@
 # ══════════════════════════════════════════════════════════════════════
 #  max-news-bot-omsu — установка одной командой
 #
-#  curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/install.sh | bash
+#  ПРАВИЛЬНЫЙ ЗАПУСК (интерактивные вопросы):
+#    bash <(curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/install.sh)
+#
+#  или (если bash <(...) не работает — например, sh):
+#    curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/install.sh -o install.sh
+#    bash install.sh
+#
+#  ВАЖНО: НЕ запускайте как «curl … | bash» — в этом случае stdin занят
+#  скриптом, и мастер не сможет прочитать ваши ответы.
 #
 #  Мастер задаёт несколько вопросов, пишет .env и docker-compose.yml,
 #  запускает бота. Секреты остаются только в .env на этом сервере.
@@ -32,7 +40,8 @@ ask() { # ask "Вопрос" "подсказка" "значение_по_умо�
 }
 
 # Валидаторы
-valid_token() { [[ "$1" =~ ^[A-Za-z0-9_-]+$ ]]; }        # буквы/цифры/-/_
+# Точка разрешена: VK-ключи выглядят как vk1.a.<...> (с точками!)
+valid_token() { [[ "$1" =~ ^[A-Za-z0-9_.-]+$ ]]; }   # буквы/цифры/./-/_
 valid_chat_id() { [[ "$1" =~ ^-?[0-9]+$ ]]; }
 
 # ─── 1. Проверка docker ───────────────────────────────────────────────

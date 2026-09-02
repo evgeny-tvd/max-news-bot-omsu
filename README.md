@@ -14,7 +14,7 @@ VK-паблика и/или публичного канала MAX и автом�
 ## Быстрый старт (~10 минут)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/install.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/install.sh)
 ```
 
 Мастер спросит: токен бота MAX, ID вашего канала, VK-паблик (по желанию),
@@ -22,6 +22,9 @@ curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/i
 
 > Не знаете ID канала? Добавьте бота в канал и напишите ему `/start` —
 > бот ответит «📢 Этот чат: …».
+>
+> ⚠️ Запускайте именно через `bash <(curl …)`, а не `curl … | bash` —
+> иначе мастер не сможет прочитать ваши ответы (stdin занят скриптом).
 
 Подробная инструкция — в [DEPLOY.md](DEPLOY.md).
 
