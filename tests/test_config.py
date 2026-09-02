@@ -57,6 +57,21 @@ def test_validate_webhook_requires_url():
                  webhook_url="", vk_token="vksecret")
     errs = validate(s)
     assert any("WEBHOOK_URL" in e for e in errs)
-    # с URL — ошибок нет
+    assert any("WEBHOOK_SECRET" in e for e in errs)
+    # с URL и секретом — ошибок нет
     s.webhook_url = "https://bot.example.com/webhook"
+    s.webhook_secret = "s3cr3t"
     assert validate(s) == []
+
+
+def test_admin_ids_parsing():
+    assert load_settings({"ADMIN_CHAT_IDS": "123, -456; 789"}).admin_chat_ids == [123, -456, 789]
+    assert load_settings({"ADMIN_CHAT_IDS": "abc, 12x"}).admin_chat_ids == []
+    assert load_settings({}).admin_chat_ids == []
+
+
+def test_intervals_clamped_to_minimum():
+    # 0 и отрицательные → busy-loop/ValueError в asyncio.sleep
+    s = load_settings({"NEWS_INTERVAL": "0", "RSCH_INTERVAL": "5"})
+    assert s.news_interval >= 30
+    assert s.rsch_interval >= 30

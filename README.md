@@ -54,6 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/evgeny-tvd/max-news-bot-omsu/main/i
 | `RSCH_CHAT_ID` | встроен* | публичный канал-источник (по умолчанию РСЧС Свердловской обл.) |
 | `NEWS_INTERVAL` | — | интервал опроса, сек (60) |
 | `POLLING` | — | `true` — Long Polling (по умолчанию); `false` — webhook |
+| `ADMIN_CHAT_IDS` | — | личные чаты, откуда можно запускать `/news_now`, `/rsch_now` (через запятую); по умолчанию — только из канала |
 | `TZ` | — | часовой пояс (Asia/Yekaterinburg) |
 
 Полный список — в [.env.example](.env.example).

@@ -13,8 +13,11 @@
 """
 
 import asyncio
+import json
 import logging
+import os
 import shutil
+import tempfile
 from datetime import datetime
 
 import aiohttp
@@ -75,13 +78,22 @@ START_TEXT = (
 async def _http_get_bytes(
     url: str, max_bytes: int = MAX_MEDIA_BYTES, headers: dict | None = None
 ) -> bytes | None:
-    """Скачивает файл по URL в память (с лимитом размера и заголовками)."""
+    """Скачивает файл по URL в память (с лимитом размера и заголовками).
+
+    Предпроверка Content-Length: не тянем в память файл, который заведомо
+    больше лимита (иначе OOM на больших видео).
+    """
     try:
         async with aiohttp.ClientSession() as session:
             # Таймаут 300 с: видео 720p ~75 МБ качается ~85-90 с
             async with session.get(url, timeout=300, headers=headers or {}) as resp:
                 if resp.status != 200:
                     log.warning("HTTP %s при скачивании %s", resp.status, url[:80])
+                    return None
+                clen = resp.headers.get("Content-Length")
+                if clen and clen.isdigit() and int(clen) > max_bytes:
+                    log.warning("Файл слишком большой (%s б по Content-Length): %s",
+                                clen, url[:80])
                     return None
                 data = await resp.read()
                 if len(data) > max_bytes:
@@ -177,7 +189,12 @@ async def _post_media(post: dict) -> tuple[list, list]:
 # ─── Источник 1: VK-паблик ────────────────────────────────────────────
 
 async def fetch_vk_posts() -> list:
-    """Последние посты со стены паблика через VK API wall.get."""
+    """Последние посты со стены паблика через VK API wall.get.
+
+    ВАЖНО: токен ни при каких условиях не должен попадать в логи — при
+    не-JSON ответе (502/HTML) aiohttp-исключение содержит полный URL с
+    access_token. Поэтому весь запрос обёрнут, а ошибки логируются без URL.
+    """
     if not settings.vk_token or not settings.vk_domain:
         log.info("VK-источник выключен (нужны VK_DOMAIN и VK_TOKEN)")
         return []
@@ -187,12 +204,27 @@ async def fetch_vk_posts() -> list:
         "count": 5,
         "v": "5.199",
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            "https://api.vk.com/method/wall.get", params=params, timeout=20
-        ) as resp:
-            data = await resp.json()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.vk.com/method/wall.get", params=params, timeout=20
+            ) as resp:
+                status = resp.status
+                text = await resp.text()
+        if status != 200:
+            log.error("VK API: HTTP %s (домен=%s) — токен НЕ логируем", status, settings.vk_domain)
+            return []
+        try:
+            data = json.loads(text)
+        except ValueError:
+            log.error("VK API: ответ не-JSON (HTTP %s, домен=%s)", status, settings.vk_domain)
+            return []
+    except Exception as e:
+        # aiohttp-ошибки содержат URL с токеном — логируем только тип/домен
+        log.error("VK API: сетевая ошибка (%s) домен=%s", type(e).__name__, settings.vk_domain)
+        return []
     if "error" in data:
+        # error содержит только код и сообщение VK, токена там нет
         log.error("VK API error: %s", data["error"])
         return []
     return data.get("response", {}).get("items", [])
@@ -207,10 +239,19 @@ def _read_state(path: str) -> str:
 
 
 def _save_state(path: str, value: str) -> None:
-    import os
+    """Атомарная запись state: tmp-файл + os.replace (не оставим битый файл)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        f.write(value)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(value)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 async def repost_news(force: bool = False) -> int:
@@ -221,7 +262,11 @@ async def repost_news(force: bool = False) -> int:
     if not items:
         return 0
 
-    last_id = int(_read_state(VK_STATE_FILE) or 0)
+    last_id = 0
+    try:
+        last_id = int(_read_state(VK_STATE_FILE) or 0)
+    except ValueError:
+        log.error("VK state повреждён (%s) — начинаем с 0", VK_STATE_FILE)
     # Первая инициализация (state пуст): только запоминаем последний пост,
     # чтобы не заливать в канал архив паблика (как у РСЧС).
     if last_id == 0 and not force:
@@ -236,6 +281,7 @@ async def repost_news(force: bool = False) -> int:
         return 0
 
     sent = 0
+    last_ok_id = last_id
     for p in reversed(fresh):  # от старых к новым — хронология в канале
         text = (p.get("text") or "").strip()
         if not text and not (p.get("attachments")):
@@ -254,12 +300,16 @@ async def repost_news(force: bool = False) -> int:
                 attachments=media or None,
             )
             sent += 1
+            last_ok_id = p["id"]
             log.info("Отправлен пост wall%s_%s (медиа: %d)", p["owner_id"], p["id"], len(media))
         except Exception as e:
             log.error("Ошибка отправки поста %s: %s", p["id"], e)
+            # Стоп и НЕ продвигаем state: неудачный пост повторится на следующем тике
+            break
         await asyncio.sleep(1)  # лимит MAX ~2 сообщения/сек
 
-    _save_state(VK_STATE_FILE, str(max(p["id"] for p in fresh)))
+    if sent:
+        _save_state(VK_STATE_FILE, str(last_ok_id))
     return sent
 
 
@@ -323,21 +373,28 @@ async def repost_rsch(force: bool = False) -> int:
         return 0
 
     sent = 0
+    last_ok_mid = last_mid
     for m in reversed(fresh):
         text = (m.body.text or "").strip()
         if not text:
+            # Пустые пропускаем, но «проходим» их в state — они не для репоста
+            last_ok_mid = m.body.mid
             continue
         if len(text) > MAX_TEXT_LEN:
             text = text[: MAX_TEXT_LEN - 3] + "..."
         try:
             await bot.send_message(chat_id=settings.target_chat_id, text=text)
             sent += 1
+            last_ok_mid = m.body.mid
             log.info("Канал-источник: отправлено mid=%s (%d симв.)", m.body.mid, len(text))
         except Exception as e:
             log.error("Канал-источник: ошибка отправки mid=%s: %s", m.body.mid, e)
+            # Стоп и НЕ продвигаем state: неудачное сообщение повторится на след. тике
+            break
         await asyncio.sleep(1)
 
-    _save_state(RSCH_STATE_FILE, newest_mid)
+    if sent or last_ok_mid != last_mid:
+        _save_state(RSCH_STATE_FILE, last_ok_mid)
     return sent
 
 
@@ -353,6 +410,23 @@ async def rsch_loop():
         except Exception as e:
             log.error("rsch_loop: %s", e)
         await asyncio.sleep(settings.rsch_interval)
+
+
+# ─── Авторизация управляющих команд ─────────────────────────────────
+
+def _can_control(chat_id: int) -> bool:
+    """Можно ли из этого чата запускать команды, пишущие в канал.
+
+    По умолчанию — только из самого целевого канала (TARGET_CHAT_ID):
+    посторонние в канал писать не могут, а значит и дёргать /news_now
+    не смогут. Дополнительно можно разрешить личные чаты через
+    ADMIN_CHAT_IDS в .env (например, личку владельца бота).
+    """
+    if not chat_id:
+        return False
+    if chat_id == settings.target_chat_id:
+        return True
+    return chat_id in settings.admin_chat_ids
 
 
 # ─── Команды бота ─────────────────────────────────────────────────────
@@ -419,6 +493,11 @@ async def news_cmd(event: MessageCreated):
 
 @dp.message_created(Command("news_now"))
 async def news_now_cmd(event: MessageCreated):
+    # Управляющая команда: пишет в канал — только из канала или от админов
+    chat_id = event.message.recipient.chat_id
+    if not _can_control(chat_id):
+        await event.message.answer("⛔ Команда доступна только администратору канала.")
+        return
     sent = await repost_news(force=True)
     if sent == 0:
         await event.message.answer("Свежих новостей нет 🙂")
@@ -426,6 +505,11 @@ async def news_now_cmd(event: MessageCreated):
 
 @dp.message_created(Command("rsch_now"))
 async def rsch_now_cmd(event: MessageCreated):
+    # Управляющая команда: пишет в канал — только из канала или от админов
+    chat_id = event.message.recipient.chat_id
+    if not _can_control(chat_id):
+        await event.message.answer("⛔ Команда доступна только администратору канала.")
+        return
     sent = await repost_rsch(force=True)
     if sent == 0:
         await event.message.answer("Свежих сообщений из канала нет 🙂")

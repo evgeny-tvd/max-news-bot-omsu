@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 def _read_secret(env_name: str, path: str = "") -> str:
@@ -47,6 +47,10 @@ class Settings:
     polling: bool = True            # True: Long Polling (ноль инфраструктуры);
                                     # False: webhook (нужен домен + HTTPS)
     target_chat_id: int = 0         # канал, куда репостим (обязателен)
+    # Кто может запускать управляющие команды (/news_now, /rsch_now),
+    # которые пишут в канал. По умолчанию — только из самого канала
+    # (TARGET_CHAT_ID), куда посторонние писать не могут.
+    admin_chat_ids: list[int] = field(default_factory=list)
 
     # ── Источник 1: VK-паблик (ОБЯЗАТЕЛЕН — ядро репостера) ─────
     vk_domain: str = "gorodtavda"    # напр. gorodtavda (без vk.com/)
@@ -75,6 +79,23 @@ class Settings:
     tz: str = "UTC"
 
 
+MIN_INTERVAL = 30  # нижняя граница интервалов опроса: меньше — спам MAX API
+
+
+def _parse_id_list(raw: str) -> list[int]:
+    """'123, -456, 789' → [123, -456, 789]. Мусор молча отбрасывается."""
+    out: list[int] = []
+    for part in raw.replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            out.append(int(part))
+        except ValueError:
+            continue
+    return out
+
+
 def load_settings(env: dict | None = None) -> Settings:
     """Собирает Settings из os.environ (или переданного dict — для тестов)."""
     old = dict(os.environ)
@@ -86,11 +107,12 @@ def load_settings(env: dict | None = None) -> Settings:
             token=_read_secret("MAX_BOT_TOKEN", "/run/secrets/max_bot_token"),
             polling=_as_bool("POLLING", True),
             target_chat_id=_as_int("TARGET_CHAT_ID", 0),
+            admin_chat_ids=_parse_id_list(os.environ.get("ADMIN_CHAT_IDS", "")),
             vk_domain=(os.environ.get("VK_DOMAIN") or "gorodtavda").strip(),
             vk_token=_read_secret("VK_TOKEN", "/run/secrets/vk_token"),
-            news_interval=_as_int("NEWS_INTERVAL", 60),
+            news_interval=max(MIN_INTERVAL, _as_int("NEWS_INTERVAL", 60)),
             rsch_chat_id=_as_int("RSCH_CHAT_ID", -69712963313704),
-            rsch_interval=_as_int("RSCH_INTERVAL", 60),
+            rsch_interval=max(MIN_INTERVAL, _as_int("RSCH_INTERVAL", 60)),
             state_dir=os.environ.get("STATE_DIR", "./state").strip(),
             webhook_url=os.environ.get("WEBHOOK_URL", "").strip().rstrip("/"),
             webhook_secret=_read_secret("WEBHOOK_SECRET", "/run/secrets/webhook_secret"),
@@ -116,6 +138,9 @@ def validate(s: Settings) -> list[str]:
         errors.append("VK_DOMAIN не задан (паблик-источник, напр. gorodtavda)")
     if not s.vk_token:
         errors.append("VK_TOKEN не задан (сервисный ключ dev.vk.ru — VK обязателен)")
-    if not s.polling and not s.webhook_url:
-        errors.append("WEBHOOK_URL не задан (нужен при POLLING=false)")
+    if not s.polling:
+        if not s.webhook_url:
+            errors.append("WEBHOOK_URL не задан (нужен при POLLING=false)")
+        if not s.webhook_secret:
+            errors.append("WEBHOOK_SECRET не задан (webhook без подписи — опасно)")
     return errors

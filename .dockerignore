@@ -1,0 +1,17 @@
+# Секреты и данные — не должны попадать в build-context даже случайно
+.env
+secrets/
+state/
+*.md
+.git/
+.github/
+tests/
+requirements-dev.txt
+.dockerignore
+.gitignore
+LICENSE
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
