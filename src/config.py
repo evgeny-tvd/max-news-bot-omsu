@@ -48,9 +48,9 @@ class Settings:
                                     # False: webhook (нужен домен + HTTPS)
     target_chat_id: int = 0         # канал, куда репостим (обязателен)
 
-    # ── Источник 1: VK-паблик (опционально) ────────────────────
-    vk_domain: str = ""             # напр. gorodtavda (без vk.com/)
-    vk_token: str = ""              # сервисный ключ dev.vk.ru
+    # ── Источник 1: VK-паблик (ОБЯЗАТЕЛЕН — ядро репостера) ─────
+    vk_domain: str = "gorodtavda"    # напр. gorodtavda (без vk.com/)
+    vk_token: str = ""              # сервисный ключ dev.vk.ru (обязателен)
     news_interval: int = 60         # сек, опрос стены
 
     # ── Источник 2: канал MAX (РСЧС-стиль) ───────────────────────
@@ -86,7 +86,7 @@ def load_settings(env: dict | None = None) -> Settings:
             token=_read_secret("MAX_BOT_TOKEN", "/run/secrets/max_bot_token"),
             polling=_as_bool("POLLING", True),
             target_chat_id=_as_int("TARGET_CHAT_ID", 0),
-            vk_domain=os.environ.get("VK_DOMAIN", "").strip(),
+            vk_domain=(os.environ.get("VK_DOMAIN") or "gorodtavda").strip(),
             vk_token=_read_secret("VK_TOKEN", "/run/secrets/vk_token"),
             news_interval=_as_int("NEWS_INTERVAL", 60),
             rsch_chat_id=_as_int("RSCH_CHAT_ID", -69712963313704),
@@ -112,6 +112,10 @@ def validate(s: Settings) -> list[str]:
         errors.append("MAX_BOT_TOKEN не задан (токен бота MAX)")
     if not s.target_chat_id:
         errors.append("TARGET_CHAT_ID не задан (куда репостить)")
+    if not s.vk_domain:
+        errors.append("VK_DOMAIN не задан (паблик-источник, напр. gorodtavda)")
+    if not s.vk_token:
+        errors.append("VK_TOKEN не задан (сервисный ключ dev.vk.ru — VK обязателен)")
     if not s.polling and not s.webhook_url:
         errors.append("WEBHOOK_URL не задан (нужен при POLLING=false)")
     return errors

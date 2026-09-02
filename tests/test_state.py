@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # bot.py валидирует конфиг при импорте — даём минимально валидный env
 os.environ["MAX_BOT_TOKEN"] = "test-token"
 os.environ["TARGET_CHAT_ID"] = "-1"
+os.environ["VK_TOKEN"] = "test-vk-token"
 
 from src import bot  # noqa: E402
 
