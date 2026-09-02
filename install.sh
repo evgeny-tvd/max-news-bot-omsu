@@ -27,10 +27,12 @@ warn() { echo -e "${YELLOW}!!${RESET} $*"; }
 fail() { echo -e "${RED}!!${RESET} $*"; exit 1; }
 
 ask() { # ask "Вопрос" "подсказка" "значение_по_умолчанию"
+  # ВАЖНО: все промпты — в stderr (>&2). ask() вызывается через $(ask ...),
+  # командная подстановка захватывает stdout — там должен остаться ТОЛЬКО ответ.
   local q="$1" hint="${2:-}" def="${3:-}" ans
-  echo -e "${BOLD}${q}${RESET}"
-  [ -n "$hint" ] && echo -e "${DIM}  ${hint}${RESET}"
-  [ -n "$def" ] && echo -e "${DIM}  [по умолчанию: ${def}]${RESET}"
+  echo -e "${BOLD}${q}${RESET}" >&2
+  [ -n "$hint" ] && echo -e "${DIM}  ${hint}${RESET}" >&2
+  [ -n "$def" ] && echo -e "${DIM}  [по умолчанию: ${def}]${RESET}" >&2
   read -r -p "> " ans
   ans="${ans:-$def}"
   # Убираем CR (вставка из буфера Windows) и лишние пробелы по краям
